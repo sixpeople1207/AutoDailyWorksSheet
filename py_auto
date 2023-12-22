@@ -4,137 +4,159 @@ import pywinauto
 import pprint
 import time
 import pandas as pd 
-
-## 설계사 이름 파일에서 이름을 불러와 리스트를 만든다
-## 현장마다 일보 내용에서 이름의 인덱스를 찾아 반환한다. 
-## 주의점 : 설계사의 일보에 다른 설계사의 이름을 언급한다면 잘못된 인덱스가 들어간다. ex) 김도일 일보에 조윤태 설계교육 이렇게..
-##          그렇다면 조윤태의 인덱스는 김도일 바로 아래 오게된다. 
-##          일보 내용에 포함되었는지도 알아낼 방법 필요하다. 
-
-def find_name_indexes(ilbo, path):
-    name_li = []
-    index_li = []
-    f = open(path,'r')
-    
-    while True:
-        line = f.readline()
-        line = line.replace('\n','')
-        name_li.append(line)
-        if not line: break
-    f.close()
-    
-    for name in name_li:
-        index = ilbo.find(name)
-        if index != -1:
-            index_li.append(index)
-       
-    index_li.sort()
-    return index_li
+from datetime import date 
+import sys
+import os
+from PyQt5 import uic
+from PyQt5.QtWidgets import QApplication , QMainWindow, QFileDialog, QAction, QLabel, QSizePolicy, QMessageBox, QDialogButtonBox
+from PyQt5.QtCore import QMetaObject, Qt,QPoint, QCoreApplication, QObject, pyqtSignal, QEvent, QRect, QThread
+import glob
 
 
-if __name__ == '__main__':
-    df = pd.DataFrame({'a':['a1']})
-    pd.options.display.width = 300
-    procs = pywinauto.findwindows.find_elements()
+form_class = uic.loadUiType('./main.ui')[0]
 
-    for proc in procs:
-        if proc.name == 'HanyangMessenger':
-            break
+class MainWindows(QMainWindow, form_class):
+    def __init__(self):
+        super().__init__()
+        self.setupUi(self)
+        self.btn_close.clicked.connect(QCoreApplication.instance().quit)
+        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        self.btn_ilboSave.clicked.connect(self.ilbo_saveToExcel)
+	
+    ## 설계사 이름 파일에서 이름을 불러와 리스트를 만든다
+    ## 현장마다 일보 내용에서 이름의 인덱스를 찾아 반환한다. 
+    ## 주의점 : 설계사의 일보에 다른 설계사의 이름을 언급한다면 잘못된 인덱스가 들어간다. ex) 김도일 일보에 조윤태 설계교육 이렇게..
+    ##          그렇다면 조윤태의 인덱스는 김도일 바로 아래 오게된다. 
+    ##          일보 내용에 포함되었는지도 알아낼 방법 필요하다. 
 
-    app = application.Application(backend='uia').connect(process=proc.process_id)
-    dlg = app.window(title='HanyangMessenger')
-    main = app['HanyangMessenger']
-    main.set_focus()
-    # app.HanyangMessenger.Document.ListBox3.ListItem2.ListBox['강현Static'].click()
-    # dlg.Document.ListBox3.ListItem2.ListBox.click_input()
-
-    ## 잘 안됨..21
-    # contents = dlg.child_window(title="최용훈", control_type="Text").wait('exists')
-    # print(dlg.window_text())
-
-    ## 23.11.15 일 잠깐 업데이트 11월 15일 이후 데이터만 가져오기. 
-    ## 이제 엑셀에 쓰기와 사용자별로 클릭해서 가져오기
-    ## 일보 요청하기 
-    ## 실시간 감지 등.
-    con = dlg.descendants(control_type="Text")
-    index = 0
-    df = pd.DataFrame()
-    dd = []
-    count = 0
-    hyenjang_li = ["청주 M15 현장","이천 M16 현장"]
-    path = "./names"
-    for i in con:
-        index +=1
-        if str(i).find("11월 17일") != -1:
-            count=index
-        if count != 0:
-            text_li = str(i).split("'")
-            if(len(text_li) > 1):
-                find_hyenjang_num_c = text_li[1].find(hyenjang_li[0])
-                find_hyenjang_num_i = text_li[1].find(hyenjang_li[1])
-            if find_hyenjang_num_c != -1 or find_hyenjang_num_i != -1:
-                    text = text_li[1]
-                    name_indexes = find_name_indexes(text,path)
-                    for i in range(0,len(name_indexes)):
-                        if(len(name_indexes) > i+1):
-                            dd.append(text[name_indexes[i]:name_indexes[i+1]]) ## pywinauto.controls.uia_controls.StaticWrapper 를 형변환 
-                        else:
-                            dd.append(text[name_indexes[i]:])
-    df = pd.DataFrame([dd]) ## 잘안들어감 형변환하니 가능성있음
-    df = df.T
-    df.to_excel('output.xlsx')
-    file_name = '일일보고.xlsx'
-    
-    wb = load_workbook(file_name , data_only=True )
-    ws = wb.active
-    # merge_cells = ws.merged_cells
-    ## 엑셀에서 병합된 셀의 정보를 불러올 수 있다.
-    # for merge_cell_num in merge_cells:
-    #     print(merge_cell_num)
-        # ws.cell[m.start_cell] = 3
-    ## 병합된 셀의 정보를 확인하고 첫 행인 D15~D45를 입력하면 사용자별로 쓸수 있다
-    ## names을 읽어와서 엑셀에서 C행을 찾아 작업자의 행 번호를 불러온다.
-    # for row in wb.worksheets[0].rows:
-    #     print(row[3])
-    name_li = []
-    index_li = []
-    f = open(path,'r')
-    import warnings
-    warnings.filterwarnings("ignore", 'This pattern has match groups')
-
-    while True:
-        line = f.readline()
-        line = line.replace('\n','')
-        ## df에서 str contains에서 찾을때 ()가 문제가 발생한다. 그래서 str에서 이름만 슬라이싱해서 사용.
-        name_li.append(line[:3])
-        if not line: break
-    f.close()
-    try:
-        for i in range(15,60):
-            ex_name = str(ws.cell(row=i,column=3).value)
+    def find_name_indexes(self, ilbo, path):
+            name_li = []
+            index_li = []
+            f = open(path,'r',encoding='UTF8')
+            
+            while True:
+                line = f.readline()
+                line = line.replace('\n','')
+                name_li.append(line)
+                if not line: break
+            f.close()
+            
             for name in name_li:
-                if ex_name[:3] == name:
-                    ws["D"+str(i)] =  df.loc[df[0].str.contains(name)][0].values[0]
-                    wb.save(file_name)    
-    except Exception as e:
-        print(e)
-    print(df.loc[df[0].str.contains("조윤태")][0].values[0])
+                index = ilbo.find(name)
+                if index != -1:
+                    index_li.append(index)
+                else:
+                    print(f"이름을 찾지 못했습니다.:{0}",name)
+            
+            index_li.sort()
+            return index_li
 
-    # print("2023년 11월 15일")
-## 1안. 사용자 대화방 클릭해서 대화 가져오기 ##
-# text = dlg.Document.ListBox3.ListItem2.ListBox.texts()
-# for i in range(len(text)):
-#     textmin = text[i][0]
-#     print(textmin)
-#     if str(textmin).find('분 전')!=-1 or str(textmin).find('시간 전')!=-1:
-#         dlg.Document.ListBox3.ListItem2.ListBox[i].click_input()
-# # 대화 내용 가져오기.... 
-#         text_list=dlg.Text.texts()
-#         # text_list = dlg.Document.texts()
-#         print(text_list)
+    def ilbo_saveToExcel(self):
+        df = pd.DataFrame({'a':['a1']})
+        pd.options.display.width = 300
+        procs = pywinauto.findwindows.find_elements()
+
+        for proc in procs:
+            if proc.name == 'HanyangMessenger':
+                break
+
+        app = application.Application(backend='uia').connect(process=proc.process_id)
+        dlg = app.window(title='HanyangMessenger')
+        main = app['HanyangMessenger']
+        main.set_focus()
+
+        con = dlg.descendants(control_type="Text")
+        index = 0
+        df = pd.DataFrame()
+        dd = []
+        count = 0
+        hyenjang_li = ["청주 M15 현장","이천 M16 현장"]
+        path = "./names"
+        today = date.today()
+        today = today.strftime('%m월 %d일')    
+        today = today.replace('0','') #한양 메신저에는 01일 -> 1일로 표기
+
+        for i in con:
+            index +=1
+            if str(i).find(today) != -1:
+                count=index
+            if count != 0:
+                text_li = str(i).split("'")
+                if(len(text_li) > 1):
+                    find_hyenjang_num_c = text_li[1].find(hyenjang_li[0])
+                    find_hyenjang_num_i = text_li[1].find(hyenjang_li[1])
+                if find_hyenjang_num_c != -1 or find_hyenjang_num_i != -1:
+                        for i in range(len(text_li)):
+                            if(i < 3 and i > 0): ## 간혹 리스트가 [2]에 정보가 들어가있는 경우가 있음. 1과 2만 탐색해서 정보 가져옴.
+                                text = text_li[i]
+                                # 텍스트 정리
+                                text = text.replace('•','')
+                                # text = text.replace('\n\n','')
+                                name_indexes = self.find_name_indexes(text,path)
+                                if(len(name_indexes) > 0):
+                                    for i in range(0,len(name_indexes)):
+                                        if(len(name_indexes) > i+1):
+                                            dd.append(text[name_indexes[i]:name_indexes[i+1]]) ## pywinauto.controls.uia_controls.StaticWrapper 를 형변환 
+                                        else:
+                                            dd.append(text[name_indexes[i]:])
+
+        df = pd.DataFrame([dd]) ## 잘안들어감 형변환하니 가능성있음
+        df = df.T
+        df.to_excel('output.xlsx')
+        file_name = '일일보고.xlsx'
+        
+        wb = load_workbook(file_name , data_only=True )
+        ws = wb.active
+        name_li = []
+        f = open(path,'r',encoding='UTF8')
+
+        import warnings
+        warnings.filterwarnings("ignore", 'This pattern has match groups')
+
+        while True:
+            line = f.readline()
+            line = line.replace('\n','')
+            ## df에서 str contains에서 찾을때 ()가 문제가 발생한다. 그래서 str에서 이름만 슬라이싱해서 사용.
+            name_li.append(line[:3])
+            if not line: break
+        f.close()
+
+        try:
+            for i in range(15,60):
+                ex_name = str(ws.cell(row=i,column=3).value)
+                for name in name_li:
+                    if ex_name[:3] == name:
+                        # 만약 df에 이름이 없다면 엑셀에 쓰지 않는다.
+                        if len(df.loc[df[0].str.contains(name)]) > 0:
+                            ws["D"+str(i)] =  df.loc[df[0].str.contains(name)][0].values[0]
+                            wb.save(file_name)   
+            res = QMessageBox.question(self, "일보 자동저장", "저장 되었습니다.\n일보 파일을 여시겠습니까?")
+       
+            if(res==16384):
+                os.system(file_name)                
+        except Exception as e:
+            print(e)
+
+        # merge_cells = ws.merged_cells
+        ## 엑셀에서 병합된 셀의 정보를 불러올 수 있다.
+        # for merge_cell_num in merge_cells:
+        #     print(merge_cell_num)
+            # ws.cell[m.start_cell] = 3
+        ## 병합된 셀의 정보를 확인하고 첫 행인 D15~D45를 입력하면 사용자별로 쓸수 있다
+        ## names을 읽어와서 엑셀에서 C행을 찾아 작업자의 행 번호를 불러온다.
+        # for row in wb.worksheets[0].rows:
+        #     print(row[3])
 
 
-  
+if __name__ == '__main__': 
+    app = QApplication(sys.argv)
+    myWindow = MainWindows()
+    myWindow.show()
+    sys.exit(app.exec_())
+     
+
+
+
 
 # 23.09.21 참고 중 ... https://purplechip.tistory.com/42
 
@@ -156,10 +178,16 @@ if __name__ == '__main__':
 ## 사람 순서 대로 클릭(Static을 차례대로 클릭)
 
 # dlg.Document.print_control_identifiers()
-# doc = dlg.ListBox3.ListItem2.ListBox.Static4
+
+## 진행중.. 클릭23.11.27
+#----------------------------------------------------------
+# doc = dlg.Document.ListBox3.ListItem2.ListBox
+# for do in doc:
+#     print(do.texts()[0])
 # doc.click_input()
-## 순차적으로 진행이 잘 됨. Thread하나 붙여서 만들면 될 것 같음. 기본적 Thread인것 같음.?
+# 순차적으로 진행이 잘 됨. Thread하나 붙여서 만들면 될 것 같음. 기본적 Thread인것 같음.?
 # dlg.Document.print_control_identifiers()
+#----------------------------------------------------------
 
 # doc = dlg.Document.ListBox3.ListItem2.ListBox.Static9
 # doc.print_control_identifiers()
@@ -186,3 +214,4 @@ if __name__ == '__main__':
 # doc.click_input()
 # text = dlg.Document.ListBox3.Static
 # print(text)
+
